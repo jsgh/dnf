@@ -227,24 +227,26 @@ class Base(object):
 
     def use_module_includes(self):
         include_repos = set()
-        include_nevras = set()
+        include_nevras_dic = {}
         include_query_list = []
         for repo_module in self.repo_module_dict.values():
             if repo_module.conf.enabled:
                 include_set, repos = self.repo_module_dict.get_includes(repo_module.name,
-                                                                     repo_module.conf.stream)
+                                                                        repo_module.conf.stream)
                 include_repos.update(repos)
-                include_nevras.update(include_set)
+                for nevra in include_set:
+                    include_nevras_dic.setdefault(nevra, set()).update([repo.id for repo in repos])
             elif repo_module.defaults.stream:
-                include_set, repos = self.repo_module_dict.get_includes(repo_module.name,
-                                                                     repo_module.defaults.stream)
+                include_set, repos = self.repo_module_dict.get_includes(
+                    repo_module.name, repo_module.defaults.stream)
                 include_repos.update(repos)
-                include_nevras.update(include_set)
-        for nevra in include_nevras:
+                for nevra in include_set:
+                    include_nevras_dic.setdefault(nevra, set()).update([repo.id for repo in repos])
+        for nevra, repos in include_nevras_dic.items():
             subj = dnf.subject.Subject(nevra)
             nevra_query = subj.get_best_query(self.sack, forms=[hawkey.FORM_NEVRA], with_nevra=True,
                                               with_provides=False, with_filenames=False).apply()
-            include_query_list.append(nevra_query)
+            include_query_list.append(nevra_query.filter(reponame=repos).apply())
 
         for include_query in include_query_list:
             self.sack.add_includes(include_query)
